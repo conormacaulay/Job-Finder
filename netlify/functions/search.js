@@ -2,10 +2,10 @@ const https = require("https");
 
 exports.handler = async function (event) {
   const params = event.queryStringParameters || {};
-  const apiKey = params.apiKey;
+  const apiKey = process.env.RAPIDAPI_KEY;
 
   if (!apiKey) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Missing API key" }) };
+    return { statusCode: 500, body: JSON.stringify({ error: "API key not configured on server." }) };
   }
 
   const searchParams = new URLSearchParams();
