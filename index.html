@@ -1,37 +1,573 @@
-exports.handler = async function (event) {
-  const params = event.queryStringParameters || {};
-  const apiKey = params.apiKey;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Scout — Find Hidden Opportunities</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-  if (!apiKey) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Missing API key" }) };
+  :root {
+    --bg: #0d0f0e;
+    --surface: #141614;
+    --surface2: #1a1c1a;
+    --border: #2a2e2a;
+    --accent: #b8f05a;
+    --accent-dim: #7aab2a;
+    --text: #e8ede8;
+    --text-muted: #7a8a7a;
+    --text-dim: #4a5a4a;
+    --red: #ff6b6b;
+    --amber: #f5a623;
   }
 
-  const searchParams = new URLSearchParams();
-  const allowed = ["query", "page", "num_pages", "date_posted", "employment_types", "remote_jobs_only"];
-  allowed.forEach((k) => { if (params[k]) searchParams.append(k, params[k]); });
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  const url = `https://jsearch.p.rapidapi.com/search?${searchParams.toString()}`;
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "X-RapidAPI-Key": apiKey,
-        "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
-      },
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  header { padding: 48px 0 32px; border-bottom: 1px solid var(--border); }
+
+  .header-inner { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+
+  .logo-block h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .logo-block h1 span { color: var(--accent); font-style: italic; }
+
+  .logo-block p {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .api-key-section { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  .api-key-section label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .api-key-section a { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--accent-dim); text-decoration: none; display: block; }
+  .api-key-section a:hover { color: var(--accent); }
+
+  input[type="text"], input[type="password"], input[type="number"], select, textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.875rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(184, 240, 90, 0.08);
+  }
+
+  input[type="password"] { padding: 8px 12px; width: 260px; font-family: 'DM Mono', monospace; font-size: 0.8rem; }
+
+  .main { display: grid; grid-template-columns: 320px 1fr; gap: 24px; padding: 32px 0 60px; align-items: start; }
+
+  @media (max-width: 800px) { .main { grid-template-columns: 1fr; } }
+
+  .sidebar { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; position: sticky; top: 24px; }
+
+  .sidebar-title { font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+
+  .field-group { margin-bottom: 16px; }
+
+  .field-group label { display: block; font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+
+  .field-group label .optional { font-weight: 300; color: var(--text-dim); font-size: 0.7rem; margin-left: 4px; }
+
+  .field-group input[type="text"], .field-group select { width: 100%; padding: 9px 12px; }
+
+  select option { background: var(--surface2); }
+
+  .section-divider { font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin: 18px 0 12px; display: flex; align-items: center; gap: 10px; }
+  .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .checkbox-group { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .chip-checkbox { display: flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; cursor: pointer; transition: all 0.15s; user-select: none; }
+  .chip-checkbox input { display: none; }
+  .chip-checkbox:has(input:checked) { background: rgba(184,240,90,0.1); border-color: rgba(184,240,90,0.35); color: var(--accent); }
+
+  .range-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .range-row input { padding: 9px 12px; width: 100%; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .toggle-label { font-size: 0.82rem; color: var(--text); }
+  .toggle-label .sub { display: block; font-size: 0.7rem; color: var(--text-dim); margin-top: 1px; }
+
+  .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track { position: absolute; inset: 0; background: var(--border); border-radius: 20px; cursor: pointer; transition: background 0.2s; }
+  .toggle-track::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; background: var(--text-muted); border-radius: 50%; transition: transform 0.2s, background 0.2s; }
+  .toggle input:checked + .toggle-track { background: var(--accent-dim); }
+  .toggle input:checked + .toggle-track::after { transform: translateX(16px); background: var(--accent); }
+
+  .search-btn { width: 100%; padding: 13px; background: var(--accent); color: #0d0f0e; border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: opacity 0.15s, transform 0.1s; margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .search-btn:hover { opacity: 0.9; }
+  .search-btn:active { transform: scale(0.99); }
+  .search-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .search-btn .spinner { width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #000; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+  .search-btn.loading .spinner { display: block; }
+  .search-btn.loading .btn-text { opacity: 0.6; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .results-panel { min-height: 400px; }
+  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .results-title { font-family: 'DM Serif Display', serif; font-size: 1.4rem; font-weight: 400; }
+  .results-count { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; display: none; }
+
+  .empty-state { text-align: center; padding: 80px 20px; color: var(--text-dim); }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.4; }
+  .empty-state p { font-size: 0.875rem; line-height: 1.7; max-width: 340px; margin: 0 auto; }
+
+  .status-bar { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--text-muted); padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 20px; display: none; }
+  .status-bar.visible { display: block; }
+  .status-bar .dot { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; animation: pulse 1.2s ease infinite; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .error-msg { background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.25); color: var(--red); border-radius: 8px; padding: 14px 16px; font-size: 0.82rem; margin-bottom: 16px; display: none; line-height: 1.6; }
+  .error-msg.visible { display: block; }
+
+  .info-box { background: rgba(184,240,90,0.04); border: 1px solid rgba(184,240,90,0.12); border-radius: 8px; padding: 12px 16px; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; display: none; }
+  .info-box.visible { display: block; }
+  .info-box a { color: var(--accent-dim); text-decoration: none; }
+  .info-box a:hover { color: var(--accent); }
+
+  .job-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; margin-bottom: 14px; transition: border-color 0.15s, transform 0.1s; animation: fadeUp 0.3s ease both; }
+  .job-card:hover { border-color: var(--accent-dim); transform: translateY(-1px); }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .job-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .job-title { font-family: 'DM Serif Display', serif; font-size: 1.05rem; font-weight: 400; line-height: 1.3; }
+  .job-company { font-size: 0.82rem; color: var(--accent); font-weight: 500; margin-top: 3px; }
+  .job-location { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; font-family: 'DM Mono', monospace; }
+
+  .salary-badge { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--accent); background: rgba(184,240,90,0.07); border: 1px solid rgba(184,240,90,0.2); padding: 4px 10px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+
+  .job-meta { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+  .meta-tag { font-family: 'DM Mono', monospace; font-size: 0.67rem; color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 4px; }
+  .meta-tag.remote { color: var(--amber); border-color: rgba(245,166,35,0.2); background: rgba(245,166,35,0.05); }
+
+  .job-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.65; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+  .job-desc.expanded { -webkit-line-clamp: unset; }
+
+  .expand-btn { background: none; border: none; color: var(--accent-dim); font-family: 'DM Mono', monospace; font-size: 0.68rem; cursor: pointer; padding: 0 0 10px; letter-spacing: 0.04em; display: block; }
+  .expand-btn:hover { color: var(--accent); }
+
+  .job-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .posted-date { font-size: 0.7rem; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+
+  .apply-link { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--accent); text-decoration: none; border: 1px solid rgba(184,240,90,0.3); padding: 5px 14px; border-radius: 4px; letter-spacing: 0.06em; transition: background 0.15s; }
+  .apply-link:hover { background: rgba(184,240,90,0.08); }
+
+  .pagination { display: flex; gap: 10px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
+  .page-btn { font-family: 'DM Mono', monospace; font-size: 0.75rem; padding: 7px 16px; background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+  .page-btn:hover, .page-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(184,240,90,0.05); }
+  .page-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: var(--border); color: var(--text-dim); background: var(--surface2); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="header-inner">
+      <div class="logo-block">
+        <h1>Job <span>Scout</span></h1>
+        <p>Precision job search — Google for Jobs via JSearch API</p>
+      </div>
+      <div class="api-key-section">
+        <div>
+          <label for="apiKey">RapidAPI Key (JSearch)</label>
+          <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank">→ Get free key — 200 searches/month</a>
+        </div>
+        <input type="password" id="apiKey" placeholder="Paste your RapidAPI key..." />
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="sidebar-title">Search Filters</div>
+
+      <div class="field-group">
+        <label>Role / Job Title <span class="optional">*required</span></label>
+        <input type="text" id="jobTitle" placeholder="e.g. BI Analyst, Data Analyst" />
+      </div>
+
+      <div class="field-group">
+        <label>Location <span class="optional">optional</span></label>
+        <input type="text" id="location" placeholder="e.g. Minneapolis MN, Remote, USA" />
+      </div>
+
+      <div class="field-group">
+        <label>Additional Keywords <span class="optional">optional</span></label>
+        <input type="text" id="keywords" placeholder="e.g. SQL, Tableau, Oracle, dbt" />
+      </div>
+
+      <div class="section-divider">Work Style</div>
+
+      <div class="field-group">
+        <label>Work Arrangement</label>
+        <div class="checkbox-group">
+          <label class="chip-checkbox"><input type="checkbox" name="workArrangement" value="remote" /> Remote</label>
+          <label class="chip-checkbox"><input type="checkbox" name="workArrangement" value="hybrid" /> Hybrid</label>
+          <label class="chip-checkbox"><input type="checkbox" name="workArrangement" value="onsite" /> On-site</label>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label>Employment Type</label>
+        <div class="checkbox-group">
+          <label class="chip-checkbox"><input type="checkbox" name="empType" value="FULLTIME" checked /> Full-time</label>
+          <label class="chip-checkbox"><input type="checkbox" name="empType" value="PARTTIME" /> Part-time</label>
+          <label class="chip-checkbox"><input type="checkbox" name="empType" value="CONTRACTOR" /> Contract</label>
+          <label class="chip-checkbox"><input type="checkbox" name="empType" value="INTERN" /> Intern</label>
+        </div>
+      </div>
+
+      <div class="section-divider">Compensation</div>
+
+      <div class="toggle-row">
+        <div class="toggle-label">
+          Pay Transparency Only
+          <span class="sub">Only show jobs with listed salary</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="payTransparency" />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="field-group" style="margin-top:14px">
+        <label>Salary Range (USD) <span class="optional">optional</span></label>
+        <div class="range-row">
+          <input type="text" id="salaryMin" placeholder="Min $" />
+          <input type="text" id="salaryMax" placeholder="Max $" />
+        </div>
+      </div>
+
+      <div class="section-divider">Freshness & Volume</div>
+
+      <div class="field-group">
+        <label>Posted Within</label>
+        <select id="postedWithin">
+          <option value="all">Any time</option>
+          <option value="3days">Last 3 days</option>
+          <option value="week" selected>Last week</option>
+          <option value="month">Last month</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label>Results Per Page</label>
+        <select id="numPages">
+          <option value="1">~10 results (1 API call)</option>
+          <option value="2" selected>~20 results (2 API calls)</option>
+          <option value="3">~30 results (3 API calls)</option>
+        </select>
+      </div>
+
+      <button class="search-btn" id="searchBtn" onclick="runSearch(1)">
+        <div class="spinner"></div>
+        <span class="btn-text">Find Opportunities</span>
+      </button>
+    </aside>
+
+    <main class="results-panel">
+      <div class="results-header">
+        <div class="results-title">Opportunities</div>
+        <div class="results-count" id="resultsCount"></div>
+      </div>
+
+      <div class="info-box" id="infoBox">
+        ℹ️ <strong>Free tier:</strong> JSearch gives <strong>200 free searches/month</strong> via RapidAPI — no credit card needed to start.
+        Get your key at <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank">rapidapi.com →</a>
+      </div>
+
+      <div class="status-bar" id="statusBar">
+        <span class="dot"></span><span id="statusText">Searching Google for Jobs in real-time...</span>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <div id="resultsContainer">
+        <div class="empty-state">
+          <div class="icon">🔍</div>
+          <p>Set your filters and hit <strong>Find Opportunities</strong>.<br><br>Powered by Google for Jobs — covers LinkedIn, Indeed, Glassdoor, company career pages, and hundreds of niche boards simultaneously.</p>
+        </div>
+      </div>
+
+      <div class="pagination" id="pagination"></div>
+    </main>
+  </div>
+</div>
+
+<script>
+  let currentPage = 1;
+
+  function buildQuery() {
+    const title = document.getElementById('jobTitle').value.trim();
+    const keywords = document.getElementById('keywords').value.trim();
+    const location = document.getElementById('location').value.trim();
+    const arrangements = Array.from(document.querySelectorAll('input[name="workArrangement"]:checked')).map(e => e.value);
+
+    let q = title;
+    if (keywords) q += ' ' + keywords;
+    const remoteOnly = arrangements.includes('remote') && !arrangements.includes('onsite') && !arrangements.includes('hybrid');
+    if (remoteOnly) q += ' remote';
+    if (location) q += ' in ' + location;
+    return q;
+  }
+
+  function parseSalary(str) {
+    if (!str) return null;
+    const num = parseInt(str.replace(/[^0-9]/g, ''));
+    return isNaN(num) ? null : num;
+  }
+
+  async function fetchPage(apiKey, query, page, empTypes, postedWithin, remoteOnly) {
+    const params = new URLSearchParams({ apiKey, query, page, num_pages: 1 });
+    if (postedWithin !== 'all') params.append('date_posted', postedWithin);
+    if (empTypes.length > 0) params.append('employment_types', empTypes.join(','));
+    if (remoteOnly) params.append('remote_jobs_only', 'true');
+
+    const res = await fetch(`/api/search?${params}`);
+
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 401) throw new Error('Invalid API key. Check your RapidAPI key and make sure you\'ve subscribed to JSearch (free tier available).');
+      if (res.status === 429) throw new Error('Free request limit reached (200/month). Upgrade at rapidapi.com to continue.');
+      throw new Error(`API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data || [];
+  }
+
+  async function runSearch(page = 1) {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const jobTitle = document.getElementById('jobTitle').value.trim();
+
+    if (!apiKey) { showError('Please enter your RapidAPI key. Get one free at rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch'); return; }
+    if (!jobTitle) { showError('Please enter a job title to search for.'); return; }
+
+    currentPage = page;
+    const query = buildQuery();
+    const empTypes = Array.from(document.querySelectorAll('input[name="empType"]:checked')).map(e => e.value);
+    const arrangements = Array.from(document.querySelectorAll('input[name="workArrangement"]:checked')).map(e => e.value);
+    const remoteOnly = arrangements.includes('remote') && !arrangements.includes('onsite') && !arrangements.includes('hybrid');
+    const postedWithin = document.getElementById('postedWithin').value;
+    const numPages = parseInt(document.getElementById('numPages').value);
+    const payTransparency = document.getElementById('payTransparency').checked;
+    const salaryMin = parseSalary(document.getElementById('salaryMin').value);
+    const salaryMax = parseSalary(document.getElementById('salaryMax').value);
+
+    hideError();
+    setLoading(true);
+    showStatus(`Searching Google for Jobs...`);
+    clearResults();
+    document.getElementById('infoBox').classList.add('visible');
+
+    try {
+      let allJobs = [];
+      for (let p = 0; p < numPages; p++) {
+        showStatus(`Fetching page ${p + 1} of ${numPages}...`);
+        const jobs = await fetchPage(apiKey, query, page + p, empTypes, postedWithin, remoteOnly);
+        allJobs = allJobs.concat(jobs);
+        if (jobs.length === 0) break;
+      }
+
+      // Client-side filters
+      if (payTransparency) allJobs = allJobs.filter(j => j.job_min_salary || j.job_max_salary);
+      if (salaryMin !== null) allJobs = allJobs.filter(j => !j.job_max_salary || j.job_max_salary >= salaryMin);
+      if (salaryMax !== null) allJobs = allJobs.filter(j => !j.job_min_salary || j.job_min_salary <= salaryMax);
+
+      hideStatus();
+      renderResults(allJobs, page, numPages);
+
+    } catch (err) {
+      hideStatus();
+      showError(err.message);
+    }
+
+    setLoading(false);
+  }
+
+  function formatSalary(job) {
+    if (!job.job_min_salary && !job.job_max_salary) return null;
+    const period = job.job_salary_period ? `/${job.job_salary_period.toLowerCase()}` : '';
+    const fmt = n => n ? `$${Math.round(n).toLocaleString()}` : null;
+    const min = fmt(job.job_min_salary), max = fmt(job.job_max_salary);
+    if (min && max) return `${min}–${max}${period}`;
+    if (max) return `Up to ${max}${period}`;
+    if (min) return `From ${min}${period}`;
+    return null;
+  }
+
+  function formatDate(str) {
+    if (!str) return null;
+    const diff = Math.floor((new Date() - new Date(str)) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff < 7) return `${diff}d ago`;
+    if (diff < 30) return `${Math.floor(diff/7)}w ago`;
+    return new Date(str).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function renderResults(jobs, page, numPages) {
+    const container = document.getElementById('resultsContainer');
+    const countEl = document.getElementById('resultsCount');
+
+    if (!jobs.length) {
+      container.innerHTML = `<div class="empty-state"><div class="icon">😶</div><p>No results for these filters. Try broadening your search — remove location, loosen the date range, or simplify keywords.</p></div>`;
+      countEl.style.display = 'none';
+      return;
+    }
+
+    countEl.textContent = `${jobs.length} result${jobs.length !== 1 ? 's' : ''}`;
+    countEl.style.display = 'block';
+    container.innerHTML = '';
+
+    jobs.forEach((job, i) => {
+      const salary = formatSalary(job);
+      const posted = formatDate(job.job_posted_at_datetime_utc);
+      const isRemote = job.job_is_remote;
+      const loc = isRemote ? 'Remote' : [job.job_city, job.job_state].filter(Boolean).join(', ');
+      const descId = `desc-${i}`;
+      const desc = (job.job_description || '').trim();
+      const shortDesc = desc.length > 400;
+
+      const card = document.createElement('div');
+      card.className = 'job-card';
+      card.style.animationDelay = `${i * 35}ms`;
+      card.innerHTML = `
+        <div class="job-card-header">
+          <div>
+            <div class="job-title">${job.job_title || 'Untitled Role'}</div>
+            <div class="job-company">${job.employer_name || 'Unknown Company'}</div>
+            ${loc ? `<div class="job-location">${loc}</div>` : ''}
+          </div>
+          ${salary ? `<div class="salary-badge">${salary}</div>` : ''}
+        </div>
+        <div class="job-meta">
+          ${job.job_employment_type ? `<span class="meta-tag">${job.job_employment_type}</span>` : ''}
+          ${isRemote ? `<span class="meta-tag remote">Remote</span>` : ''}
+          ${job.job_publisher ? `<span class="meta-tag">via ${job.job_publisher}</span>` : ''}
+          ${job.job_required_experience?.required_experience_in_months ? `<span class="meta-tag">${Math.round(job.job_required_experience.required_experience_in_months/12)}+ yrs exp</span>` : ''}
+        </div>
+        ${desc ? `
+          <div class="job-desc" id="${descId}">${desc.substring(0, 400)}${shortDesc ? '...' : ''}</div>
+          ${shortDesc ? `<button class="expand-btn" onclick="toggleDesc('${descId}',this)">+ Read more</button>` : ''}
+        ` : ''}
+        <div class="job-card-footer">
+          <div class="posted-date">${posted ? `Posted ${posted}` : ''}</div>
+          ${job.job_apply_link ? `<a class="apply-link" href="${job.job_apply_link}" target="_blank" rel="noopener">Apply →</a>` : ''}
+        </div>
+      `;
+      container.appendChild(card);
     });
 
-    const data = await response.json();
-
-    return {
-      statusCode: response.status,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify(data),
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
-    };
+    renderPagination(page, numPages);
   }
-};
+
+  function toggleDesc(id, btn) {
+    const el = document.getElementById(id);
+    el.classList.toggle('expanded');
+    btn.textContent = el.classList.contains('expanded') ? '− Read less' : '+ Read more';
+  }
+
+  function renderPagination(page, numPages) {
+    const pg = document.getElementById('pagination');
+    pg.innerHTML = '';
+
+    const prev = document.createElement('button');
+    prev.className = 'page-btn';
+    prev.textContent = '← Prev';
+    prev.disabled = page <= 1;
+    prev.onclick = () => runSearch(currentPage - numPages);
+
+    const curr = document.createElement('button');
+    curr.className = 'page-btn active';
+    curr.textContent = `Page ${Math.ceil(page / numPages)}`;
+    curr.disabled = true;
+
+    const next = document.createElement('button');
+    next.className = 'page-btn';
+    next.textContent = 'Next →';
+    next.onclick = () => runSearch(currentPage + numPages);
+
+    pg.appendChild(prev);
+    pg.appendChild(curr);
+    pg.appendChild(next);
+  }
+
+  function setLoading(v) {
+    const btn = document.getElementById('searchBtn');
+    btn.disabled = v;
+    btn.classList.toggle('loading', v);
+  }
+
+  function showStatus(msg) {
+    document.getElementById('statusText').textContent = msg;
+    document.getElementById('statusBar').classList.add('visible');
+  }
+
+  function hideStatus() { document.getElementById('statusBar').classList.remove('visible'); }
+  function showError(msg) { const e = document.getElementById('errorMsg'); e.textContent = msg; e.classList.add('visible'); }
+  function hideError() { document.getElementById('errorMsg').classList.remove('visible'); }
+  function clearResults() {
+    document.getElementById('resultsContainer').innerHTML = '';
+    document.getElementById('resultsCount').style.display = 'none';
+    document.getElementById('pagination').innerHTML = '';
+  }
+
+  // Persist key in session
+  document.getElementById('apiKey').addEventListener('input', function() { sessionStorage.setItem('jscout_key', this.value); });
+  const k = sessionStorage.getItem('jscout_key');
+  if (k) document.getElementById('apiKey').value = k;
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && document.activeElement.tagName !== 'BUTTON') runSearch(1); });
+</script>
+</body>
+</html>
